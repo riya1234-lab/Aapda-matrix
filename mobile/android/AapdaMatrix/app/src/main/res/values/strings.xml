@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Aapda Matrix</string>
+    <string name="app_tagline">Victim Emergency Interface &amp; Multi-Hop BLE Mesh Relay</string>
+    <string name="select_calamity_prompt">IDENTIFY EMERGENCY TYPE</string>
+    <string name="sos_button_idle">PRESS TO ACTIVATE SOS</string>
+    <string name="sos_button_recording">RECORDING VOICE SOS (10s)...</string>
+    <string name="sos_button_transmitting">BROADCASTING SOS...</string>
+    <string name="battery_guard_status">Battery Guard Active (Auto Trigger @ 5%)</string>
+    <string name="mesh_status">BLE Mesh Active (5s Hopping Loop)</string>
+    <string name="view_sops">View Safety SOPs</string>
+    <string name="open_offline_map">Open Offline Map</string>
+    <string name="direct_dispatch_call">DIRECT DISPATCH CALL</string>
+</resources>

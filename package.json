@@ -1,0 +1,13 @@
+{
+  "name": "aapda-matrix",
+  "version": "4.0.0",
+  "description": "AAPDA MATRIX — Universal Emergency SOS and Disaster Response Platform",
+  "scripts": {
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "cd client && npm run dev",
+    "build:client": "cd client && npm run build",
+    "build:server": "cd server && npm run build",
+    "test:server": "cd server && npm test",
+    "seed": "cd server && npm run prisma:seed"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "AAPDA MATRIX Emergency Response",
+  "short_name": "AAPDA MATRIX",
+  "description": "Universal Emergency SOS and Disaster Response Platform - One Tap. One Network. One Lifeline.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0F172A",
+  "theme_color": "#0F172A",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/shield-icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
