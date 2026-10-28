@@ -1,0 +1,149 @@
+// AAPDA MATRIX - Prisma ORM Schema
+// Supports SQLite for zero-config local development and PostgreSQL for production
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                    String     @id @default(uuid())
+  displayName           String
+  email                 String?    @unique
+  passwordHash          String?
+  role                  String     @default("CITIZEN") // CITIZEN, OPERATOR, COMMANDER
+  phoneNumber           String?
+  bloodGroup            String?
+  allergies             String?
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
+  incidents             Incident[]
+}
+
+model Incident {
+  id                      String               @id // Custom SOS_XXXXXX or UUID
+  userId                  String?
+  anonymousId             String?
+  emergencyCategory       String // WOMEN_SAFETY, NATURAL_DISASTER, etc.
+  disasterSubtype         String? // FLOOD, EARTHQUAKE, LANDSLIDE, etc.
+  priority                String               @default("HIGH") // CRITICAL, HIGH, MEDIUM, LOW
+  description             String               @default("")
+  latitude                Float?
+  longitude               Float?
+  locationAccuracy        Float?
+  locationProtocol        String?              @default("GPS")
+  batteryLevel            Int?
+  status                  String               @default("PENDING") // PENDING, ACKNOWLEDGED, DISPATCHED, etc.
+  communicationMethod     String               @default("INTERNET") // INTERNET, BLE_MESH, WIFI_DIRECT, SMS
+  deliveryStatus          String               @default("DELIVERED_SERVER") // QUEUED, TRANSMITTING, DELIVERED_SERVER, ACKNOWLEDGED
+  acknowledgementReceived Boolean              @default(false)
+  hopCount                Int                  @default(0)
+  createdAt               DateTime             @default(now())
+  receivedAt              DateTime             @default(now())
+  operatorNotes           String?
+  responseTeamId          String?
+  
+  user                    User?                @relation(fields: [userId], references: [id])
+  responseTeam            ResponseTeam?        @relation(fields: [responseTeamId], references: [id])
+  attachments             IncidentAttachment[]
+  history                 IncidentHistory[]
+  messageRelays           MessageRelay[]
+
+  @@index([status])
+  @@index([priority])
+  @@index([emergencyCategory])
+  @@index([createdAt])
+}
+
+model IncidentAttachment {
+  id                     String   @id @default(uuid())
+  incidentId             String
+  attachmentType         String   @default("AUDIO_VOICE") // AUDIO_VOICE, IMAGE, TELEMETRY
+  secureStorageReference String
+  mimeType               String   @default("audio/webm")
+  fileSize               Int      @default(0)
+  durationSeconds        Int?     @default(5)
+  createdAt              DateTime @default(now())
+
+  incident               Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId])
+}
+
+model EmergencyContact {
+  id              String   @id @default(uuid())
+  serviceName     String
+  region          String   @default("National")
+  telephoneNumber String
+  category        String   @default("GENERAL") // POLICE, AMBULANCE, FIRE, WOMEN, DISASTER, GENERAL
+  verifiedAt      DateTime @default(now())
+  active          Boolean  @default(true)
+  priorityOrder   Int      @default(1)
+
+  @@index([category])
+  @@index([active])
+}
+
+model ResponseTeam {
+  id                 String     @id @default(uuid())
+  teamName           String
+  serviceType        String     @default("SAR") // SAR, MEDICAL, FIRE, POLICE, CIVIL_DEFENSE
+  availabilityStatus String     @default("AVAILABLE") // AVAILABLE, DEPLOYED, RESTING
+  contactNumber      String?
+  baseLocation       String?
+  latitude           Float?
+  longitude          Float?
+  city               String     @default("National")
+  assignedIncidentId String?
+  createdAt          DateTime   @default(now())
+
+  incidents          Incident[]
+}
+
+model IncidentHistory {
+  id             String   @id @default(uuid())
+  incidentId     String
+  previousStatus String
+  newStatus      String
+  changedBy      String
+  timestamp      DateTime @default(now())
+  notes          String?
+
+  incident       Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId])
+}
+
+model MessageRelay {
+  messageId      String    @id
+  incidentId     String
+  originDeviceId String
+  hopCount       Int       @default(0)
+  maxHops        Int       @default(5)
+  expiresAt      DateTime
+  deliveryStatus String    @default("QUEUED")
+  lastRelayAt    DateTime  @default(now())
+
+  incident       Incident  @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId])
+}
+
+model RelayNode {
+  id              String   @id
+  deviceName      String
+  latitude        Float?
+  longitude       Float?
+  batteryLevel    Int      @default(100)
+  totalHopsRouted Int      @default(0)
+  lastSeen        DateTime @default(now())
+  status          String   @default("ONLINE") // ONLINE, OFFLINE, DEGRADED
+
+  @@index([status])
+}

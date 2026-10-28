@@ -51,17 +51,20 @@ mobile/.env
 *.sqlite3
 *.db
 *.db-journal
+prisma/*.db
+prisma/*.db-journal
+!prisma/schema.prisma
 server/prisma/*.db
 server/prisma/*.db-journal
-!server/prisma/schema.prisma
 
 # ------------------------------------------------------------------------------
 # Uploaded & Generated Media
 # Keep audio upload directory structure and verified demo emergency voice log
 # ------------------------------------------------------------------------------
+uploads/audio/*
+!uploads/audio/.gitkeep
+!uploads/audio/demo_emergency_voice_log.wav
 server/uploads/audio/*
-!server/uploads/audio/.gitkeep
-!server/uploads/audio/demo_emergency_voice_log.wav
 
 # ------------------------------------------------------------------------------
 # Android & Mobile Artifacts

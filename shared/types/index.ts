@@ -28,6 +28,7 @@ export type IncidentStatus =
   | 'PENDING'
   | 'ACKNOWLEDGED'
   | 'DISPATCHED'
+  | 'IN_ACTION'
   | 'EN_ROUTE'
   | 'ON_SCENE'
   | 'RESOLVED'
@@ -80,11 +81,48 @@ export interface IncidentHistoryItem {
 export interface ResponseTeam {
   id: string;
   teamName: string;
-  serviceType: 'SAR' | 'MEDICAL' | 'FIRE' | 'POLICE' | 'CIVIL_DEFENSE';
-  availabilityStatus: 'AVAILABLE' | 'DEPLOYED' | 'RESTING';
+  serviceType: 'SAR' | 'MEDICAL' | 'FIRE' | 'POLICE' | 'CIVIL_DEFENSE' | string;
+  availabilityStatus: 'AVAILABLE' | 'DEPLOYED' | 'RESTING' | string;
   assignedIncidentId?: string | null;
-  contactNumber?: string;
-  baseLocation?: string;
+  contactNumber?: string | null;
+  baseLocation?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  distanceKm?: number;
+  etaMinutes?: number;
+  city?: string;
+}
+
+export interface PersonalEmergencyContact {
+  id: string;
+  name: string;
+  phone: string;
+  relationship: string;
+  notifyOnLowBattery: boolean;
+  createdAt: string;
+}
+
+export interface RelayNode {
+  id: string;
+  deviceName: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  batteryLevel: number;
+  totalHopsRouted: number;
+  lastSeen: string;
+  status: 'ONLINE' | 'OFFLINE' | 'DEGRADED';
+}
+
+export interface DispatchAlertPayload {
+  incidentId: string;
+  status: 'IN_ACTION' | 'DISPATCHED';
+  teamName: string;
+  serviceType: string;
+  contactNumber?: string | null;
+  distanceKm?: number;
+  etaMinutes?: number;
+  message: string;
+  dispatchedAt: string;
 }
 
 export interface Incident {
