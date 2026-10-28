@@ -6,6 +6,10 @@ export interface GeolocationState extends LocationCoordinates {
   hasGpsLock: boolean;
   error: string | null;
   permissionStatus: 'prompt' | 'granted' | 'denied' | 'unknown';
+  locationStatus: 'GPS_VERIFIED' | 'LOCATION_UNAVAILABLE' | 'USER_PROVIDED';
+  locationSource: 'GPS' | 'NETWORK' | 'USER_MANUAL' | 'UNAVAILABLE';
+  isEmergencyOverrideAllowed: boolean;
+  userProvidedAddress: string;
 }
 
 export function useGeolocation() {
@@ -18,6 +22,10 @@ export function useGeolocation() {
     hasGpsLock: false,
     error: null,
     permissionStatus: 'unknown',
+    locationStatus: 'LOCATION_UNAVAILABLE',
+    locationSource: 'UNAVAILABLE',
+    isEmergencyOverrideAllowed: false,
+    userProvidedAddress: '',
   });
 
   const acquireLocation = useCallback(() => {
@@ -27,7 +35,9 @@ export function useGeolocation() {
         isAcquiring: false,
         hasGpsLock: false,
         protocol: 'UNAVAILABLE',
-        error: 'Hardware GPS / Geolocation is not supported by your browser',
+        locationStatus: 'LOCATION_UNAVAILABLE',
+        locationSource: 'UNAVAILABLE',
+        error: 'Hardware GPS / Geolocation is not supported by your browser.',
       }));
       return;
     }
@@ -40,37 +50,83 @@ export function useGeolocation() {
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setGeoState({
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
-          accuracy: Math.round(pos.coords.accuracy),
-          protocol: 'GPS LOCK VERIFIED',
-          isAcquiring: false,
-          hasGpsLock: true,
-          error: null,
-          permissionStatus: 'granted',
-          timestamp: pos.timestamp,
-        });
+        // Validate latitude between -90 and 90, longitude between -180 and 180
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+          setGeoState((prev) => ({
+            ...prev,
+            latitude: lat,
+            longitude: lng,
+            accuracy: Math.round(pos.coords.accuracy),
+            protocol: 'GPS LOCK VERIFIED',
+            locationStatus: 'GPS_VERIFIED',
+            locationSource: 'GPS',
+            isAcquiring: false,
+            hasGpsLock: true,
+            error: null,
+            permissionStatus: 'granted',
+            timestamp: pos.timestamp,
+          }));
+        } else {
+          setGeoState((prev) => ({
+            ...prev,
+            latitude: null,
+            longitude: null,
+            accuracy: null,
+            isAcquiring: false,
+            hasGpsLock: false,
+            protocol: 'INVALID GPS COORDS',
+            locationStatus: 'LOCATION_UNAVAILABLE',
+            locationSource: 'UNAVAILABLE',
+            error: 'Extracted GPS coordinates are outside valid spherical bounds.',
+          }));
+        }
       },
       (err) => {
         console.warn('GPS extraction required:', err.message);
-        setGeoState({
+        setGeoState((prev) => ({
+          ...prev,
           latitude: null,
           longitude: null,
           accuracy: null,
           isAcquiring: false,
           hasGpsLock: false,
           protocol: 'NO GPS LOCK',
-          error: err.code === 1 ? 'Location permission denied. Please allow GPS to enable SOS dispatch.' : err.message,
+          locationStatus: prev.userProvidedAddress ? 'USER_PROVIDED' : 'LOCATION_UNAVAILABLE',
+          locationSource: prev.userProvidedAddress ? 'USER_MANUAL' : 'UNAVAILABLE',
+          error:
+            err.code === 1
+              ? 'Location permission denied. Please allow location access, or use Emergency Override to send SOS without GPS.'
+              : err.code === 3
+              ? 'GPS acquisition timed out. Use Emergency Override or enter address manually.'
+              : err.message,
           permissionStatus: err.code === 1 ? 'denied' : 'unknown',
-        });
+        }));
       },
       {
         enableHighAccuracy: true,
-        timeout: 15000,
+        timeout: 10000,
         maximumAge: 5000,
       }
     );
+  }, []);
+
+  const enableEmergencyOverride = useCallback(() => {
+    setGeoState((prev) => ({
+      ...prev,
+      isEmergencyOverrideAllowed: true,
+    }));
+  }, []);
+
+  const setManualAddress = useCallback((addr: string) => {
+    setGeoState((prev) => ({
+      ...prev,
+      userProvidedAddress: addr,
+      locationStatus: addr.trim() ? 'USER_PROVIDED' : 'LOCATION_UNAVAILABLE',
+      locationSource: addr.trim() ? 'USER_MANUAL' : 'UNAVAILABLE',
+      isEmergencyOverrideAllowed: true,
+    }));
   }, []);
 
   useEffect(() => {
@@ -96,5 +152,7 @@ export function useGeolocation() {
   return {
     ...geoState,
     refreshLocation: acquireLocation,
+    enableEmergencyOverride,
+    setManualAddress,
   };
 }

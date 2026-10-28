@@ -11,19 +11,24 @@ datasource db {
 }
 
 model User {
-  id                    String     @id @default(uuid())
+  id                    String            @id @default(uuid())
   displayName           String
-  email                 String?    @unique
+  email                 String?           @unique
   passwordHash          String?
-  role                  String     @default("CITIZEN") // CITIZEN, OPERATOR, COMMANDER
+  role                  String            @default("CITIZEN") // CITIZEN, OPERATOR, COMMANDER
   phoneNumber           String?
   bloodGroup            String?
   allergies             String?
+  preferredLanguage     String?           @default("en")
+  address               String?
   emergencyContactName  String?
   emergencyContactPhone String?
-  createdAt             DateTime   @default(now())
-  updatedAt             DateTime   @updatedAt
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
   incidents             Incident[]
+  personalContacts      PersonalContact[]
+  auditLogs             AuditLog[]
 }
 
 model Incident {
@@ -33,32 +38,49 @@ model Incident {
   emergencyCategory       String // WOMEN_SAFETY, NATURAL_DISASTER, etc.
   disasterSubtype         String? // FLOOD, EARTHQUAKE, LANDSLIDE, etc.
   priority                String               @default("HIGH") // CRITICAL, HIGH, MEDIUM, LOW
+  originalPriority        String?
   description             String               @default("")
   latitude                Float?
   longitude               Float?
   locationAccuracy        Float?
   locationProtocol        String?              @default("GPS")
+  locationStatus          String               @default("GPS_VERIFIED") // GPS_VERIFIED, LOCATION_UNAVAILABLE, USER_PROVIDED
+  locationSource          String?              @default("GPS") // GPS, NETWORK, USER_MANUAL, UNAVAILABLE
+  userProvidedAddress     String?
   batteryLevel            Int?
-  status                  String               @default("PENDING") // PENDING, ACKNOWLEDGED, DISPATCHED, etc.
+  status                  String               @default("RECEIVED") // LOCAL_PENDING, RECEIVED, TRIAGE_PENDING, VERIFIED, DISPATCH_PENDING, IN_ACTION, RESOLVED, CANCELLED
   communicationMethod     String               @default("INTERNET") // INTERNET, BLE_MESH, WIFI_DIRECT, SMS
-  deliveryStatus          String               @default("DELIVERED_SERVER") // QUEUED, TRANSMITTING, DELIVERED_SERVER, ACKNOWLEDGED
+  deliveryStatus          String               @default("DELIVERED_SERVER") // LOCAL_PENDING, SYNCING, DELIVERED_SERVER, ACKNOWLEDGED, SYNC_FAILED
   acknowledgementReceived Boolean              @default(false)
   hopCount                Int                  @default(0)
   createdAt               DateTime             @default(now())
   receivedAt              DateTime             @default(now())
+  
+  // Triage & Assessment
+  triageMethod            String?              @default("LOCAL_RULE_ENGINE_V1") // GEMINI_AI_V1, LOCAL_RULE_ENGINE_V1, OPERATOR_OVERRIDE
+  triageRationale         String?
+  triageConfidence        Float?
+  triageOverridden        Boolean              @default(false)
+  
+  // Dispatch Info
   operatorNotes           String?
   responseTeamId          String?
+  dispatchedBy            String?
+  dispatchedAt            DateTime?
+  dispatchReason          String?
   
   user                    User?                @relation(fields: [userId], references: [id])
   responseTeam            ResponseTeam?        @relation(fields: [responseTeamId], references: [id])
   attachments             IncidentAttachment[]
   history                 IncidentHistory[]
   messageRelays           MessageRelay[]
+  telemetryEvents         TelemetryEvent[]
 
   @@index([status])
   @@index([priority])
   @@index([emergencyCategory])
   @@index([createdAt])
+  @@index([userId])
 }
 
 model IncidentAttachment {
@@ -74,6 +96,24 @@ model IncidentAttachment {
   incident               Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
 
   @@index([incidentId])
+}
+
+model PersonalContact {
+  id                 String   @id @default(uuid())
+  userId             String
+  name               String
+  phone              String
+  relationship       String   @default("FAMILY") // FAMILY, FRIEND, GUARDIAN, CAREGIVER, OTHER
+  notifyOnSosCreated Boolean  @default(true)
+  notifyOnSync       Boolean  @default(true)
+  notifyOnDispatch   Boolean  @default(true)
+  notifyOnLowBattery Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model EmergencyContact {
@@ -118,6 +158,39 @@ model IncidentHistory {
   incident       Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
 
   @@index([incidentId])
+}
+
+model TelemetryEvent {
+  id            String   @id @default(uuid())
+  incidentId    String
+  eventType     String // CREATED_LOCALLY, TRANSMISSION_ATTEMPT, SERVER_RECEIVED, ACKNOWLEDGED, SYNC_COMPLETED
+  transportType String // INTERNET_REST, WEBSOCKET, BLE_MESH, WIFI_DIRECT, SMS
+  gatewayId     String?
+  attemptNumber Int      @default(1)
+  result        String   @default("SUCCESS") // SUCCESS, FAILED, PENDING
+  durationMs    Int?
+  errorCode     String?
+  timestamp     DateTime @default(now())
+
+  incident      Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId])
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  userId       String?
+  userRole     String?
+  action       String // DISPATCH_ASSIGNED, TRIAGE_OVERRIDDEN, STATUS_UPDATED, PROFILE_UPDATED
+  resourceType String // INCIDENT, USER, RESPONSE_TEAM
+  resourceId   String
+  details      String?
+  timestamp    DateTime @default(now())
+
+  user         User?    @relation(fields: [userId], references: [id])
+
+  @@index([resourceId])
+  @@index([action])
 }
 
 model MessageRelay {

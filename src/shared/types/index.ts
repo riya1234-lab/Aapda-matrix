@@ -25,10 +25,15 @@ export type DisasterType =
 export type Priority = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
 
 export type IncidentStatus =
+  | 'LOCAL_PENDING'
+  | 'RECEIVED'
+  | 'TRIAGE_PENDING'
+  | 'VERIFIED'
+  | 'DISPATCH_PENDING'
+  | 'IN_ACTION'
   | 'PENDING'
   | 'ACKNOWLEDGED'
   | 'DISPATCHED'
-  | 'IN_ACTION'
   | 'EN_ROUTE'
   | 'ON_SCENE'
   | 'RESOLVED'
@@ -42,10 +47,13 @@ export type CommunicationMethod =
   | 'LOCAL_OFFLINE';
 
 export type DeliveryStatus =
+  | 'LOCAL_PENDING'
+  | 'SYNCING'
   | 'QUEUED'
   | 'TRANSMITTING'
   | 'DELIVERED_SERVER'
-  | 'ACKNOWLEDGED';
+  | 'ACKNOWLEDGED'
+  | 'SYNC_FAILED';
 
 export type UserRole = 'CITIZEN' | 'OPERATOR' | 'COMMANDER';
 
@@ -55,6 +63,8 @@ export interface LocationCoordinates {
   accuracy?: number | null;
   timestamp?: number;
   protocol?: string; // 'GPS' | 'NETWORK (IP)' | 'MANUAL' | 'UNAVAILABLE'
+  locationStatus?: 'GPS_VERIFIED' | 'LOCATION_UNAVAILABLE' | 'USER_PROVIDED';
+  locationSource?: 'GPS' | 'NETWORK' | 'USER_MANUAL' | 'UNAVAILABLE';
 }
 
 export interface IncidentAttachment {
@@ -88,18 +98,24 @@ export interface ResponseTeam {
   baseLocation?: string | null;
   latitude?: number | null;
   longitude?: number | null;
-  distanceKm?: number;
-  etaMinutes?: number;
+  distanceKm?: number | null;
+  etaMinutes?: number | null;
+  proximityStatus?: 'VERIFIED_PROXIMITY' | 'COORDINATES_UNAVAILABLE';
   city?: string;
 }
 
 export interface PersonalEmergencyContact {
   id: string;
+  userId?: string;
   name: string;
   phone: string;
   relationship: string;
+  notifyOnSosCreated?: boolean;
+  notifyOnSync?: boolean;
+  notifyOnDispatch?: boolean;
   notifyOnLowBattery: boolean;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface RelayNode {
@@ -125,18 +141,32 @@ export interface DispatchAlertPayload {
   dispatchedAt: string;
 }
 
+export interface VictimProfileSummary {
+  id: string;
+  displayName: string;
+  email?: string | null;
+  phoneNumber?: string | null;
+  bloodGroup?: string | null;
+  allergies?: string | null;
+}
+
 export interface Incident {
   id: string;
   userId?: string | null;
   anonymousId?: string | null;
+  user?: VictimProfileSummary | null;
   emergencyCategory: EmergencyCategory;
   disasterSubtype?: DisasterType | null;
   priority: Priority;
+  originalPriority?: Priority | null;
   description: string;
   latitude: number | null;
   longitude: number | null;
   locationAccuracy?: number | null;
   locationProtocol?: string;
+  locationStatus?: 'GPS_VERIFIED' | 'LOCATION_UNAVAILABLE' | 'USER_PROVIDED';
+  locationSource?: 'GPS' | 'NETWORK' | 'USER_MANUAL' | 'UNAVAILABLE';
+  userProvidedAddress?: string | null;
   batteryLevel?: number | null;
   createdAt: string;
   receivedAt?: string | null;
@@ -145,11 +175,24 @@ export interface Incident {
   deliveryStatus: DeliveryStatus;
   acknowledgementReceived: boolean;
   hopCount: number;
+  
+  // Triage Metadata
+  triageMethod?: string | null;
+  triageRationale?: string | null;
+  triageConfidence?: number | null;
+  triageOverridden?: boolean;
+  
+  // Dispatch Info
   responseTeamId?: string | null;
   responseTeam?: ResponseTeam | null;
+  dispatchedBy?: string | null;
+  dispatchedAt?: string | null;
+  dispatchReason?: string | null;
+  operatorNotes?: string | null;
+
   attachments?: IncidentAttachment[];
   history?: IncidentHistoryItem[];
-  operatorNotes?: string | null;
+  telemetryEvents?: TelemetryEvent[];
 }
 
 export interface CreateIncidentPayload {
@@ -163,6 +206,9 @@ export interface CreateIncidentPayload {
   longitude?: number | null;
   locationAccuracy?: number | null;
   locationProtocol?: string;
+  locationStatus?: 'GPS_VERIFIED' | 'LOCATION_UNAVAILABLE' | 'USER_PROVIDED';
+  locationSource?: 'GPS' | 'NETWORK' | 'USER_MANUAL' | 'UNAVAILABLE';
+  userProvidedAddress?: string;
   batteryLevel?: number;
   communicationMethod?: CommunicationMethod;
   audioBlob?: Blob;
@@ -199,29 +245,45 @@ export interface AIClassificationResult {
   rationale: string;
   recommendedActions: string[];
   requiresImmediateServices: boolean;
-  suggestedEmergencyNumber?: string;
+  suggestedEmergencyNumber: string;
   isFallback: boolean;
+  confidence?: number;
+  modelOrRuleset?: string;
 }
 
-export interface UserProfile {
+export interface QueuedOfflineIncident {
+  localQueueId: string;
+  incidentId: string;
+  userId?: string | null;
+  userName?: string | null;
+  payload: any;
+  audioBlob?: Blob;
+  createdAt: number;
+  retryCount: number;
+  syncState?: 'LOCAL_PENDING' | 'SYNCING' | 'SERVER_RECEIVED' | 'ACKNOWLEDGED' | 'SYNC_FAILED';
+  lastAttemptAt?: number;
+}
+
+export interface TelemetryEvent {
   id: string;
-  displayName: string;
-  phoneNumber?: string;
-  email?: string;
-  role: UserRole;
-  bloodGroup?: string;
-  allergies?: string;
-  emergencyContactName?: string;
-  emergencyContactPhone?: string;
-  createdAt: string;
+  incidentId: string;
+  eventType: string; // CREATED_LOCALLY, TRANSMISSION_ATTEMPT, SERVER_RECEIVED, ACKNOWLEDGED, SYNC_COMPLETED
+  transportType: string; // INTERNET_REST, WEBSOCKET, BLE_MESH, WIFI_DIRECT, SMS
+  gatewayId?: string | null;
+  attemptNumber: number;
+  result: string; // SUCCESS, FAILED, PENDING
+  durationMs?: number | null;
+  errorCode?: string | null;
+  timestamp: string;
 }
 
-export interface DashboardStats {
-  activeIncidents: number;
-  criticalPriority: number;
-  relayNodes: number;
-  sarReadiness: 'High' | 'Normal' | 'Degraded';
-  activeRedAlerts: number;
-  threatCount: number;
-  deployedAssets: number;
+export interface AuditLog {
+  id: string;
+  userId?: string | null;
+  userRole?: string | null;
+  action: string;
+  resourceType: string;
+  resourceId: string;
+  details?: string | null;
+  timestamp: string;
 }

@@ -10,6 +10,8 @@ export interface AIClassificationResult {
   requiresImmediateServices: boolean;
   suggestedEmergencyNumber: string;
   isFallback: boolean;
+  confidence?: number;
+  modelOrRuleset?: string;
 }
 
 export class AIService {
@@ -200,11 +202,69 @@ Respond ONLY with valid JSON in this exact structure:
       };
     }
 
-    // 4. Road Accident
+    // 4. Landslide & Mountain Hazards (evaluated before generic road/highway mentions)
+    if (text.includes('landslide') || text.includes('mudslide') || text.includes('debris') || text.includes('rockfall') || (text.includes('rocks') && text.includes('mountain'))) {
+      return {
+        category: 'NATURAL_DISASTER',
+        disasterSubtype: 'LANDSLIDE',
+        priority: 'CRITICAL',
+        rationale: 'Mass soil and boulder movement reported. Extreme danger of secondary collapses.',
+        recommendedActions: [
+          'Move away from the path of the slide or steep slope immediately',
+          'Seek shelter in sturdy structure or behind strong trees if escape is blocked',
+          'Listen for unusual rumbling sounds or snapping trees',
+          'Report exact road kilometer stone or GPS coordinates to SAR teams',
+        ],
+        requiresImmediateServices: true,
+        suggestedEmergencyNumber: '1070',
+        isFallback: true,
+      };
+    }
+
+    // 5. Flood & Submersion
+    if (text.includes('flood') || text.includes('water rising') || text.includes('drown') || text.includes('submerged') || text.includes('river')) {
+      return {
+        category: 'NATURAL_DISASTER',
+        disasterSubtype: 'FLOOD',
+        priority: 'CRITICAL',
+        rationale: 'Rising floodwaters posing imminent risk of entrapment or drowning.',
+        recommendedActions: [
+          'Move immediately to higher ground or upper floor of reinforced building',
+          'Do not walk, swim, or drive through moving water',
+          'Disconnect electricity and gas main switches before water reaches them',
+          'Signal your position using flashlight, bright cloth, or audio beacon',
+        ],
+        requiresImmediateServices: true,
+        suggestedEmergencyNumber: '1070',
+        isFallback: true,
+      };
+    }
+
+    // 6. Earthquake / Structural Collapse
+    if (text.includes('earthquake') || text.includes('quake') || text.includes('tremor') || text.includes('collapse') || text.includes('rubble')) {
+      return {
+        category: 'DISASTER_EMERGENCY',
+        disasterSubtype: text.includes('collapse') ? 'BUILDING_COLLAPSE' : 'EARTHQUAKE',
+        priority: 'CRITICAL',
+        rationale: 'Structural collapse or seismic shaking with hazard of falling debris and entrapment.',
+        recommendedActions: [
+          'DROP, COVER, and HOLD ON under heavy furniture or sturdy interior wall',
+          'Stay away from windows, outer walls, and unanchored overhead objects',
+          'If trapped, tap on a pipe or wall so rescuers can locate audio pulses',
+          'Do not light matches or flick electrical switches due to possible gas leaks',
+        ],
+        requiresImmediateServices: true,
+        suggestedEmergencyNumber: '1070',
+        isFallback: true,
+      };
+    }
+
+    // 7. Road Accident
     if (
       text.includes('accident') ||
       text.includes('crash') ||
       text.includes('hit and run') ||
+      text.includes('collision') ||
       text.includes('vehicle') ||
       text.includes('car') ||
       text.includes('bike') ||
@@ -228,68 +288,71 @@ Respond ONLY with valid JSON in this exact structure:
       };
     }
 
-    // 5. Landslide
-    if (text.includes('landslide') || text.includes('mudslide') || text.includes('debris') || text.includes('mountain')) {
+    // 8. Moderate / Non-immediate Assistance (MEDIUM)
+    if (
+      text.includes('minor cut') ||
+      text.includes('sprain') ||
+      text.includes('twisted ankle') ||
+      text.includes('flat tire') ||
+      text.includes('battery dead') ||
+      text.includes('stranded in vehicle') ||
+      text.includes('minor injury') ||
+      text.includes('cold') ||
+      text.includes('water supply') ||
+      text.includes('need directions') ||
+      text.includes('lost')
+    ) {
       return {
-        category: 'NATURAL_DISASTER',
-        disasterSubtype: 'LANDSLIDE',
-        priority: 'CRITICAL',
-        rationale: 'Mass soil and boulder movement reported. Extreme danger of secondary collapses.',
+        category: 'OTHER',
+        priority: 'MEDIUM',
+        rationale: 'Non-life-threatening situation requiring assistance or guidance without immediate physiological danger.',
         recommendedActions: [
-          'Move away from the path of the slide or steep slope immediately',
-          'Seek shelter in sturdy structure or behind strong trees if escape is blocked',
-          'Listen for unusual rumbling sounds or snapping trees',
-          'Report exact road kilometer stone or GPS coordinates to SAR teams',
+          'Stay in your current safe location',
+          'Conserve device battery and communicate via text/SMS if possible',
+          'Await operator response or contact local municipal helplines',
         ],
-        requiresImmediateServices: true,
-        suggestedEmergencyNumber: '1070',
+        requiresImmediateServices: false,
+        suggestedEmergencyNumber: '112',
         isFallback: true,
+        confidence: 0.88,
+        modelOrRuleset: 'LOCAL_RULE_ENGINE_V1',
       };
     }
 
-    // 6. Flood
-    if (text.includes('flood') || text.includes('water rising') || text.includes('drown') || text.includes('submerged') || text.includes('river')) {
+    // 9. Informational / Non-urgent (LOW)
+    if (
+      text.includes('info') ||
+      text.includes('weather forecast') ||
+      text.includes('general inquiry') ||
+      text.includes('question') ||
+      text.includes('shelter location') ||
+      text.includes('check status') ||
+      text.includes('leakage') ||
+      (text.includes('leak') && !text.includes('gas')) ||
+      text.includes('sidewalk') ||
+      text.includes('test')
+    ) {
       return {
-        category: 'NATURAL_DISASTER',
-        disasterSubtype: 'FLOOD',
-        priority: 'CRITICAL',
-        rationale: 'Rising floodwaters posing imminent risk of entrapment or drowning.',
+        category: 'OTHER',
+        priority: 'LOW',
+        rationale: 'Informational request or routine inquiry. No threat to life or property detected.',
         recommendedActions: [
-          'Move immediately to higher ground or upper floor of reinforced building',
-          'Do not walk, swim, or drive through moving water',
-          'Disconnect electricity and gas main switches before water reaches them',
-          'Signal your position using flashlight, bright cloth, or audio beacon',
+          'Refer to official disaster management guidelines and advisories',
+          'Keep lines clear for emergency distress calls',
         ],
-        requiresImmediateServices: true,
-        suggestedEmergencyNumber: '1070',
+        requiresImmediateServices: false,
+        suggestedEmergencyNumber: '112',
         isFallback: true,
+        confidence: 0.95,
+        modelOrRuleset: 'LOCAL_RULE_ENGINE_V1',
       };
     }
 
-    // 7. Earthquake / Collapse
-    if (text.includes('earthquake') || text.includes('quake') || text.includes('tremor') || text.includes('collapse') || text.includes('rubble')) {
-      return {
-        category: 'DISASTER_EMERGENCY',
-        disasterSubtype: text.includes('collapse') ? 'BUILDING_COLLAPSE' : 'EARTHQUAKE',
-        priority: 'CRITICAL',
-        rationale: 'Structural collapse or seismic shaking with hazard of falling debris and entrapment.',
-        recommendedActions: [
-          'DROP, COVER, and HOLD ON under heavy furniture or sturdy interior wall',
-          'Stay away from windows, outer walls, and unanchored overhead objects',
-          'If trapped, tap on a pipe or wall so rescuers can locate audio pulses',
-          'Do not light matches or flick electrical switches due to possible gas leaks',
-        ],
-        requiresImmediateServices: true,
-        suggestedEmergencyNumber: '1070',
-        isFallback: true,
-      };
-    }
-
-    // 8. General Emergency fallback
+    // 10. General Emergency default fallback (HIGH)
     return {
       category: 'OTHER',
       priority: 'HIGH',
-      rationale: 'Emergency alert registered. Priority dispatcher notified for immediate response.',
+      rationale: 'Unspecified emergency alert registered. Assigned standard high priority for operator review.',
       recommendedActions: [
         'Keep phone active and maintain GPS location broadcast',
         'Stay in a secure location and await operator acknowledgement',
@@ -298,6 +361,8 @@ Respond ONLY with valid JSON in this exact structure:
       requiresImmediateServices: true,
       suggestedEmergencyNumber: '112',
       isFallback: true,
+      confidence: 0.75,
+      modelOrRuleset: 'LOCAL_RULE_ENGINE_V1',
     };
   }
 }
