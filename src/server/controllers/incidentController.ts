@@ -12,6 +12,7 @@ import {
 } from '../sockets';
 import { config } from '../config';
 import { meshService } from '../services/meshService';
+import { isNaturalDisasterCategory, assessDisasterSeverity } from '../../shared/disasterConfig';
 
 export class IncidentController {
   public async createIncident(req: AuthenticatedRequest, res: Response) {
@@ -70,6 +71,27 @@ export class IncidentController {
       // Automatically bind authenticated victim's userId from session/token
       const userId = req.user ? req.user.id : null;
 
+      // ─── Disaster-Specific Severity Engine ─────────────────────────────────
+      // For natural disaster incidents, apply the deterministic severity assessment.
+      // This overrides any client-supplied priority for NATURAL_DISASTER / DISASTER_EMERGENCY
+      // to ensure HIGH or CRITICAL — never MEDIUM/LOW.
+      // Non-disaster incidents retain whatever priority was submitted.
+      let finalPriority = priority;
+      let triageRationale: string | null = null;
+      let triageConfidence: number | null = null;
+      const triageMethod = 'LOCAL_RULE_ENGINE_V1';
+
+      if (isNaturalDisasterCategory(emergencyCategory)) {
+        const assessment = assessDisasterSeverity(
+          disasterSubtype || 'OTHER',
+          description,
+          null, // trappedCount not separately sent — parsed from description
+        );
+        finalPriority = assessment.severity; // always 'HIGH' or 'CRITICAL'
+        triageRationale = assessment.rationale;
+        triageConfidence = assessment.confidence === 'HIGH' ? 0.95 : assessment.confidence === 'MODERATE' ? 0.75 : 0.55;
+      }
+
       // Determine genuine location status (never default to fake coordinates)
       const hasValidCoords =
         latitude !== undefined &&
@@ -98,7 +120,7 @@ export class IncidentController {
           anonymousId: anonymousId || (!userId ? `ANON_${crypto.randomBytes(3).toString('hex').toUpperCase()}` : null),
           emergencyCategory,
           disasterSubtype: disasterSubtype || null,
-          priority,
+          priority: finalPriority,
           originalPriority: priority,
           description,
           latitude: hasValidCoords ? parseFloat(latitude) : null,
@@ -114,12 +136,15 @@ export class IncidentController {
           deliveryStatus: 'DELIVERED_SERVER',
           acknowledgementReceived: true,
           hopCount: 0,
+          triageMethod,
+          triageRationale,
+          triageConfidence,
           history: {
             create: {
               previousStatus: 'LOCAL_PENDING',
               newStatus: 'RECEIVED',
               changedBy: req.user?.displayName || 'Citizen Distress Beacon',
-              notes: 'Distress incident received and registered on server.',
+              notes: `Distress incident received and registered on server. ${triageRationale ? `Severity: ${finalPriority}. ${triageRationale}` : ''}`,
             },
           },
         },
@@ -202,9 +227,9 @@ export class IncidentController {
 
       if (search && typeof search === 'string') {
         whereClause.OR = [
-          { id: { contains: search } },
-          { description: { contains: search } },
-          { emergencyCategory: { contains: search } },
+          { id: { contains: search, mode: 'insensitive' } },
+          { description: { contains: search, mode: 'insensitive' } },
+          { emergencyCategory: { contains: search, mode: 'insensitive' } },
         ];
       }
 

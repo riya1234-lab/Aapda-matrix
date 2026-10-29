@@ -208,6 +208,35 @@ export const ContactsPage: React.FC = () => {
                 <div className="text-center py-8 text-xs font-mono text-slate-500">
                   Loading verified directory...
                 </div>
+              ) : contacts.length === 0 ? (
+                <div className="text-center py-10 bg-white border border-slate-200 rounded-2xl p-6 space-y-2">
+                  <p className="text-sm font-black text-slate-700">Directory Unavailable</p>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Emergency contacts could not be loaded from the server. This may mean the backend is offline or the database has not been seeded yet.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsLoading(true);
+                      api.getContacts()
+                        .then(async (data) => {
+                          if (data?.contacts && data.contacts.length > 0) {
+                            setContacts(data.contacts);
+                            await cacheEmergencyContacts(data.contacts);
+                          }
+                          setIsLoading(false);
+                        })
+                        .catch(async () => {
+                          const cached = await getCachedEmergencyContacts();
+                          if (cached.length > 0) setContacts(cached);
+                          setIsLoading(false);
+                        });
+                    }}
+                    className="mt-1 text-xs font-bold text-brand-blue underline"
+                  >
+                    Retry
+                  </button>
+                </div>
               ) : (
                 contacts.map((contact) => (
                   <div

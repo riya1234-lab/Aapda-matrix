@@ -10,7 +10,7 @@ export const AppHeader: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { language, setLanguage, t } = useLanguage();
-  const { isInternetReachable, pendingQueueCount, isSyncing, triggerManualSync } = useConnectivity();
+  const { connectionState, pendingQueueCount, isSyncing, triggerManualSync, checkReachability } = useConnectivity();
   const { user, isOperator } = useAuth();
 
   const isCommandCenter = location.pathname.startsWith('/command-center');
@@ -40,11 +40,30 @@ export const AppHeader: React.FC = () => {
 
         {/* Action Controls */}
         <div className="flex items-center gap-2">
-          {/* Offline/Sync indicator */}
-          {!isInternetReachable ? (
+          {/* Connection State Indicator — shows accurate state from health check, not just navigator.onLine */}
+          {connectionState === 'CHECKING' ? (
+            <div className="flex items-center gap-1 bg-slate-100 border border-slate-200 text-slate-600 px-2 py-1 rounded-full text-xs font-semibold">
+              <Radio className="w-3 h-3 animate-pulse text-slate-400" />
+              <span>Checking…</span>
+            </div>
+          ) : connectionState === 'OFFLINE' ? (
+            <div className="flex items-center gap-1 bg-red-50 border border-red-200 text-critical-red px-2 py-1 rounded-full text-xs font-semibold">
+              <Radio className="w-3 h-3" />
+              <span>OFFLINE {pendingQueueCount > 0 ? `(${pendingQueueCount} queued)` : ''}</span>
+            </div>
+          ) : connectionState === 'SERVER_UNAVAILABLE' ? (
+            <button
+              onClick={() => checkReachability()}
+              className="flex items-center gap-1 bg-amber-50 border border-amber-200 text-amber-800 px-2 py-1 rounded-full text-xs font-semibold hover:bg-amber-100 transition-colors"
+              title="Backend unavailable — tap to retry"
+            >
+              <Radio className="w-3 h-3 animate-pulse text-amber-600" />
+              <span>SERVER DOWN {pendingQueueCount > 0 ? `(${pendingQueueCount} queued)` : ''}</span>
+            </button>
+          ) : connectionState === 'LIMITED_CONNECTIVITY' ? (
             <div className="flex items-center gap-1 bg-amber-50 border border-amber-200 text-amber-800 px-2 py-1 rounded-full text-xs font-semibold">
               <Radio className="w-3 h-3 animate-pulse text-amber-600" />
-              <span>OFFLINE {pendingQueueCount > 0 ? `(${pendingQueueCount} queued)` : ''}</span>
+              <span>LIMITED {pendingQueueCount > 0 ? `(${pendingQueueCount} queued)` : ''}</span>
             </div>
           ) : pendingQueueCount > 0 ? (
             <button

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, Bot, CheckCircle2, Radio, ExternalLink, ShieldCheck, Truck, Clock, MapPin, PhoneCall, UserCheck, AlertOctagon, RefreshCw } from 'lucide-react';
+import { AlertTriangle, Bot, CheckCircle2, Truck, MapPin, PhoneCall, Mic, MicOff } from 'lucide-react';
 import { AppHeader } from '../components/AppHeader';
 import { LocationStatus } from '../components/LocationStatus';
 import { EmergencyCard } from '../components/EmergencyCard';
@@ -16,6 +16,7 @@ import { useIncident } from '../context/IncidentContext';
 import { api } from '../services/api';
 import { getSocket } from '../services/socket';
 import { EmergencyCategory, Priority, DispatchAlertPayload } from '../types';
+import { isNaturalDisasterCategory, assessDisasterSeverity } from '../../shared/disasterConfig';
 
 export const VictimDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -62,8 +63,15 @@ export const VictimDashboard: React.FC = () => {
   const handleSelectCategory = (cat: EmergencyCategory) => {
     setSelectedCategory(cat);
     setIntelText(cat.replace(/_/g, ' '));
-    // Proportional default priority instead of everything critical
-    if (cat === 'MEDICAL_EMERGENCY' || cat === 'DISASTER_EMERGENCY') {
+
+    // Navigate to disaster directory when Natural Disaster is selected
+    if (cat === 'NATURAL_DISASTER' || cat === 'DISASTER_EMERGENCY') {
+      navigate('/disasters');
+      return;
+    }
+
+    // Proportional default priority for non-disaster emergencies
+    if (cat === 'MEDICAL_EMERGENCY') {
       setPriority('HIGH');
     } else if (cat === 'WOMEN_SAFETY' || cat === 'FIRE_EMERGENCY') {
       setPriority('HIGH');
@@ -81,7 +89,15 @@ export const VictimDashboard: React.FC = () => {
     }
 
     setIsTransmitting(true);
-    const audioPromise = startRecording(5);
+
+    // VOICE RECORDING: Only for natural disaster categories
+    // Non-disaster emergencies (medical, road accident, etc.) must NOT automatically
+    // request microphone permission or start recording.
+    const isDisaster = isNaturalDisasterCategory(selectedCategory);
+    let audioPromise: Promise<Blob | null> = Promise.resolve(null);
+    if (isDisaster) {
+      audioPromise = startRecording(5);
+    }
 
     const result = await createIncident({
       emergencyCategory: selectedCategory,
@@ -362,7 +378,7 @@ export const VictimDashboard: React.FC = () => {
       <AIChatPanel
         isOpen={isAiPanelOpen}
         onClose={() => setIsAiPanelOpen(false)}
-        onTriggerSos={handleAiSosTrigger}
+        onActivateSosWithAI={handleAiSosTrigger}
       />
 
       <AppFooter />

@@ -86,8 +86,8 @@ export const api = {
     return res.data;
   },
 
-  async getNearestResponseTeams(lat: number, lng: number): Promise<{ teams: ResponseTeam[] }> {
-    const res = await apiClient.get('/response-teams/nearest', { params: { lat, lng } });
+  async getNearestResponseTeams(lat: number, lng: number, category?: string): Promise<{ teams: ResponseTeam[] }> {
+    const res = await apiClient.get('/response-teams/nearest', { params: { lat, lng, category } });
     return res.data;
   },
 

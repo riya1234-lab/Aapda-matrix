@@ -12,7 +12,8 @@ import { useAudioRecorder } from '../hooks/useAudioRecorder';
 import { useLanguage } from '../context/LanguageContext';
 import { api } from '../services/api';
 import { DisasterType, Priority } from '../types';
-import { ArrowLeft, CheckCircle2, ShieldAlert, PhoneCall, AlertTriangle, Shield } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, ShieldAlert, PhoneCall, Mic, MicOff, AlertTriangle } from 'lucide-react';
+import { assessDisasterSeverity } from '../../shared/disasterConfig';
 
 export const DisasterDetailPage: React.FC = () => {
   const { type } = useParams<{ type: string }>();
@@ -32,6 +33,8 @@ export const DisasterDetailPage: React.FC = () => {
   const [injuriesNote, setInjuriesNote] = useState('');
   const [isTransmitting, setIsTransmitting] = useState(false);
   const [createdIncidentId, setCreatedIncidentId] = useState<string | null>(null);
+  const [audioRecordingEnabled, setAudioRecordingEnabled] = useState(false);
+  const [audioUploadStatus, setAudioUploadStatus] = useState<'idle' | 'uploading' | 'uploaded' | 'failed'>('idle');
 
   const handleTriggerSOS = async () => {
     if (!hasGpsLock || latitude === null || longitude === null) {
@@ -40,16 +43,28 @@ export const DisasterDetailPage: React.FC = () => {
     }
 
     setIsTransmitting(true);
-    const audioPromise = startRecording(5);
+
+    // VOICE RECORDING: Natural disaster SOSes support optional voice recording.
+    // Recording only starts if user has opted in via the toggle control.
+    // It does NOT delay SOS transmission — audio upload is async after SOS is created.
+    let audioPromise: Promise<Blob | null> = Promise.resolve(null);
+    if (audioRecordingEnabled) {
+      audioPromise = startRecording(5);
+    }
 
     const desc = `${disasterMeta.title} Emergency. ${
       trappedCount ? `Trapped count: ${trappedCount}. ` : ''
     }${injuriesNote ? `Injuries: ${injuriesNote}` : ''}`.trim();
 
+    // Run disaster-specific severity assessment (deterministic, does not delay SOS)
+    const trapped = trappedCount ? parseInt(trappedCount, 10) : null;
+    const severityAssessment = assessDisasterSeverity(disasterMeta.type, desc, trapped);
+    const assessedPriority: Priority = severityAssessment.severity;
+
     const res = await createIncident({
       emergencyCategory: 'NATURAL_DISASTER',
-      disasterSubtype: disasterMeta.type,
-      priority,
+      disasterSubtype: disasterMeta.type as DisasterType,
+      priority: assessedPriority,
       description: desc,
       latitude,
       longitude,
@@ -59,13 +74,17 @@ export const DisasterDetailPage: React.FC = () => {
     });
 
     setCreatedIncidentId(res.incidentId);
+    setPriority(assessedPriority);
 
     audioPromise.then(async (audioBlob) => {
       if (audioBlob && res.incidentId) {
+        setAudioUploadStatus('uploading');
         try {
           await api.uploadAudio(res.incidentId, audioBlob);
+          setAudioUploadStatus('uploaded');
         } catch (err) {
           console.warn('Audio upload deferred:', err);
+          setAudioUploadStatus('failed');
         }
       }
       setIsTransmitting(false);
@@ -99,14 +118,14 @@ export const DisasterDetailPage: React.FC = () => {
           {/* Telemetry Card */}
           <LocationStatus />
 
-          {/* Urgency & Priority Selector */}
+          {/* Urgency & Priority — for natural disasters, only CRITICAL or HIGH */}
           <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-2.5">
             <div className="flex items-center justify-between text-xs font-black text-slate-700 uppercase tracking-wider">
               <span>{t.priorityLevel}</span>
-              <span className="text-[10px] font-mono text-slate-400">Select Urgency</span>
+              <span className="text-[10px] font-mono text-slate-400">Auto-assessed — review before sending</span>
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => setPriority('CRITICAL')}
@@ -129,18 +148,10 @@ export const DisasterDetailPage: React.FC = () => {
               >
                 HIGH
               </button>
-              <button
-                type="button"
-                onClick={() => setPriority('MEDIUM')}
-                className={`py-2 px-2 rounded-xl text-xs font-black transition-all ${
-                  priority === 'MEDIUM'
-                    ? 'bg-sky-600 text-white ring-2 ring-sky-400 shadow-md'
-                    : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200'
-                }`}
-              >
-                MODERATE
-              </button>
             </div>
+            <p className="text-[10px] text-slate-500 leading-relaxed">
+              Severity is auto-assessed from your description. Natural disaster SOSes are classified as HIGH or CRITICAL only.
+            </p>
           </div>
 
           {/* Form details */}
@@ -166,6 +177,56 @@ export const DisasterDetailPage: React.FC = () => {
                 className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-critical-red"
               />
             </div>
+          </div>
+
+          {/* Voice Recording Toggle — Natural disasters only */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className={`p-2 rounded-xl ${audioRecordingEnabled ? 'bg-red-100 text-critical-red' : 'bg-slate-100 text-slate-500'}`}>
+                  {audioRecordingEnabled ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
+                </div>
+                <div>
+                  <p className="text-xs font-black text-slate-800 uppercase tracking-wider">Voice SOS Recording</p>
+                  <p className="text-[10px] text-slate-500">
+                    {audioRecordingEnabled
+                      ? 'Microphone will activate when SOS is triggered'
+                      : 'Optional — tap to enable 5-second voice distress recording'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAudioRecordingEnabled((v) => !v)}
+                className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${
+                  audioRecordingEnabled ? 'bg-critical-red' : 'bg-slate-300'
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                    audioRecordingEnabled ? 'translate-x-5' : 'translate-x-0.5'
+                  }`}
+                />
+              </button>
+            </div>
+            {isRecording && (
+              <div className="mt-2.5 flex items-center gap-1.5 text-[11px] text-critical-red font-black animate-pulse">
+                <Mic className="w-3.5 h-3.5" />
+                <span>RECORDING… {recordingSecondsLeft}s remaining</span>
+              </div>
+            )}
+            {audioUploadStatus === 'uploading' && (
+              <p className="mt-2 text-[11px] text-amber-700 font-bold">Uploading voice log securely…</p>
+            )}
+            {audioUploadStatus === 'uploaded' && (
+              <p className="mt-2 text-[11px] text-emerald-700 font-bold">✓ Voice SOS log uploaded and linked to incident</p>
+            )}
+            {audioUploadStatus === 'failed' && (
+              <p className="mt-2 text-[11px] text-slate-500 font-bold">Voice log upload deferred (SOS was still transmitted)</p>
+            )}
+            <p className="mt-2 text-[10px] text-slate-400 leading-relaxed">
+              Your voice is recorded only with your consent. Recording starts when you tap SOS. Audio is encrypted and accessible only to authorized responders.
+            </p>
           </div>
 
           {/* Trigger SOS Button (strictly requires GPS Lock) */}

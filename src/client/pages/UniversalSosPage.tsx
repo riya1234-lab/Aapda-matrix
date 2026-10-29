@@ -6,9 +6,7 @@ import { AppFooter } from '../components/AppFooter';
 import { useIncident } from '../context/IncidentContext';
 import { useGeolocation } from '../hooks/useGeolocation';
 import { useBattery } from '../hooks/useBattery';
-import { useAudioRecorder } from '../hooks/useAudioRecorder';
 import { useLanguage } from '../context/LanguageContext';
-import { api } from '../services/api';
 import { Priority } from '../types';
 
 export const UniversalSosPage: React.FC = () => {
@@ -28,7 +26,6 @@ export const UniversalSosPage: React.FC = () => {
     setManualAddress,
   } = useGeolocation();
   const { level: batteryLevel } = useBattery();
-  const { isRecording, recordingSecondsLeft, startRecording } = useAudioRecorder();
 
   const [priority, setPriority] = useState<Priority>('HIGH');
   const [countdown, setCountdown] = useState<number | null>(3);
@@ -45,8 +42,7 @@ export const UniversalSosPage: React.FC = () => {
     }
 
     if (countdown === 0 && !createdIncidentId) {
-      // Trigger universal emergency immediately
-      const audioPromise = startRecording(5);
+      // Trigger universal emergency immediately (voice recording disabled for non-natural disasters)
       createIncident({
         emergencyCategory: 'OTHER',
         priority,
@@ -61,18 +57,9 @@ export const UniversalSosPage: React.FC = () => {
         batteryLevel,
       }).then((res) => {
         setCreatedIncidentId(res.incidentId);
-        audioPromise.then(async (audioBlob) => {
-          if (audioBlob && res.incidentId) {
-            try {
-              await api.uploadAudio(res.incidentId, audioBlob);
-            } catch (err) {
-              console.warn('Audio upload deferred:', err);
-            }
-          }
-        });
       });
     }
-  }, [countdown, isCancelled, createdIncidentId, createIncident, latitude, longitude, accuracy, protocol, batteryLevel, startRecording, hasGpsLock, isEmergencyOverrideAllowed, userProvidedAddress, priority]);
+  }, [countdown, isCancelled, createdIncidentId, createIncident, latitude, longitude, accuracy, protocol, batteryLevel, hasGpsLock, isEmergencyOverrideAllowed, userProvidedAddress, priority]);
 
   const handleCancel = () => {
     setIsCancelled(true);
@@ -224,13 +211,6 @@ export const UniversalSosPage: React.FC = () => {
                     : 'Dispatched with Location Unavailable status.'}
                 </p>
               </div>
-
-              {isRecording && (
-                <div className="bg-red-950/60 border border-red-800 rounded-2xl p-3 flex items-center justify-center gap-2 text-xs text-red-200">
-                  <Radio className="w-4 h-4 animate-spin text-critical-red" />
-                  <span>Recording authorized voice log ({recordingSecondsLeft}s)...</span>
-                </div>
-              )}
 
               <button
                 type="button"
